@@ -32,4 +32,8 @@ impl Runner {
         println!("Got read lock");
         return Ok(compiled_resource.run().await?);
     }
+
+    pub async fn clear_cache(&self) {
+        self.cache.clear().await;
+    }
 }

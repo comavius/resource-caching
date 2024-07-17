@@ -2,56 +2,83 @@ use std::fs::File;
 use std::io::{prelude::*, ErrorKind};
 
 pub struct Compiled {
-    dir_path: String,
+    dir_path: Option<String>
 }
 
 impl Compiled {
-    pub async fn new(dir_path: &str) -> Result<Compiled, std::io::Error> {
-        let instance = Compiled {
-            dir_path: dir_path.to_string(),
-        };
-        Ok(instance)
+    pub fn new() -> Compiled {
+        Compiled {
+            dir_path: None,
+        }
     }
 
-    pub async fn initialize(&self, code: &str) -> Result<(), std::io::Error> {
+    pub async fn initialize(&mut self, code: &str, path: &str) -> Result<(), std::io::Error> {
+        println!("Initializing compiled resource at path: {}", path);
+        self.dir_path = Some(path.to_string());
+        println!("Allocating resources");
         self.allocate(code).await?;
-        self.compile().await?;
-        println!("Compiled successfully at path: {}", self.dir_path);
+        println!("Compiling resources");
+        self.compile().await?; 
+        println!("Completed initialization");
         Ok(())
     }
 
     pub async fn run(&self) -> Result<String, std::io::Error> {
-        println!("Start running at path: {}", self.dir_path);
-        let output = std::process::Command::new(format!("{}/src", self.dir_path))
-            .output()?;
-        println!("Completed running at path: {}", self.dir_path);
-        Ok(String::from_utf8_lossy(&output.stdout).to_string())
+        match &self.dir_path {
+            None => return Err(std::io::Error::new(ErrorKind::Other, "Path not set")),
+            Some(path) => {
+                let output = std::process::Command::new(format!("{}/src", path))
+                    .output()?;
+                println!("Completed running at path: {}", path);
+                Ok(String::from_utf8_lossy(&output.stdout).to_string())
+            }
+        }
     }
     
     async fn allocate(&self, code: &str) -> Result<(), std::io::Error> {
-        std::fs::create_dir(self.dir_path.to_owned())?;
-        let path = format!("{}/src.cpp", self.dir_path);
-        let mut src = File::create(&path)?;
-        let bytes = code.as_bytes();
-        src.write_all(bytes)?;
-        Ok(())
+        match &self.dir_path {
+            None => return Err(std::io::Error::new(ErrorKind::Other, "Path not set")),
+            Some(path) => {
+                std::fs::create_dir(path)?;
+                let mut src = File::create(format!("{}/src.cpp", path))?;
+                let bytes = code.as_bytes();
+                src.write_all(bytes)?;
+                Ok(())
+            }
+        }
     }
 
     async fn compile(&self) -> Result<(), std::io::Error> {
-        let compile_str = format!("g++ {}/src.cpp -o {}/src", self.dir_path, self.dir_path);
-        let output = std::process::Command::new("sh")
-            .arg("-c")
-            .arg(compile_str)
-            .output()?;
-        if !output.status.success() {
-            return Err(std::io::Error::new(
-                ErrorKind::Other,
-                format!(
-                    "Failed to compile code: {}",
-                    String::from_utf8_lossy(&output.stderr)
-                ),
-            ));
+        match &self.dir_path {
+            None => return Err(std::io::Error::new(ErrorKind::Other, "Path not set")),
+            Some(path) => {
+                let compile_str = format!("g++ {}/src.cpp -o {}/src", path, path);
+                let output = std::process::Command::new("sh")
+                    .arg("-c")
+                    .arg(compile_str)
+                    .output()?;
+                if !output.status.success() {
+                    return Err(std::io::Error::new(
+                        ErrorKind::Other,
+                        format!(
+                            "Failed to compile code: {}",
+                            String::from_utf8_lossy(&output.stderr)
+                        ),
+                    ));
+                }
+                Ok(())
+            },
         }
-        Ok(())
+    }
+}
+
+impl Drop for Compiled {
+    fn drop(&mut self) {
+        match &self.dir_path {
+            None => (),
+            Some(path) => {
+                std::fs::remove_dir_all(path).unwrap();
+            }
+        }
     }
 }

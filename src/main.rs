@@ -33,7 +33,13 @@ async fn main() {
         });
         handles.push(handle);
     }
+    let cache_clear_handle = tokio::spawn(async move {
+        tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
+        println!("Clearing cache");
+        runner.clear_cache().await;
+    });
     for handle in handles {
         handle.await.unwrap();
     }
+    cache_clear_handle.await.unwrap();
 }
