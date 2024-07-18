@@ -8,11 +8,12 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
 )
 
 type ExecDirective struct {
-	HockPath string   `json:"hook_path"`
-	Args     []string `json:"args"`
+	HookResourceId string   `json:"hook_path"`
+	ArgResourceIds []string `json:"args"`
 }
 
 type ExecResult struct {
@@ -38,7 +39,7 @@ func main() {
 		fmt.Println("Received directive: ", directive)
 
 		// Execute the command
-		stdout, stderr, err := execCommand(directive.HockPath, directive.Args, playgroundPath)
+		stdout, stderr, err := execCommand(directive.HookResourceId, directive.ArgResourceIds, playgroundPath)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -54,9 +55,23 @@ func main() {
 	log.Fatal(http.ListenAndServe("localhost:"+port, nil))
 }
 
-func execCommand(hookPath string, args []string, playground_path string) (string, string, error) {
+func execCommand(HookResourceId string, ArgResourceIds []string, playground_path string) (string, string, error) {
+	// Check path traversal
+	if filepath.Clean(HookResourceId) != HookResourceId {
+		return "", "", fmt.Errorf("invalid hook path")
+	}
+	for _, arg := range ArgResourceIds {
+		if filepath.Clean(arg) != arg {
+			return "", "", fmt.Errorf("invalid arg path")
+		}
+	}
+	hook_path := filepath.Join(playground_path, HookResourceId)
+	args := make([]string, len(ArgResourceIds))
+	for i, arg := range ArgResourceIds {
+		args[i] = filepath.Join(playground_path, arg)
+	}
 	// Execute the command
-	cmd := exec.Command("sh", hookPath)
+	cmd := exec.Command("sh", hook_path)
 	cmd.Dir = playground_path
 	cmd.Args = append(cmd.Args, args...)
 	var stdout, stderr bytes.Buffer
