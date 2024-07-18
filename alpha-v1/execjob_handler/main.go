@@ -12,7 +12,7 @@ import (
 )
 
 type ExecDirective struct {
-	HookResourceId string   `json:"hook_path"`
+	HookResourceId string   `json:"hook_id"`
 	ArgResourceIds []string `json:"args"`
 }
 
